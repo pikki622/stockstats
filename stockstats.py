@@ -135,20 +135,18 @@ class StockDataFrame(pd.DataFrame):
         :param shifts: the range to consider
         :return:
         """
-        column_name = '{}_{}_p'.format(column, shifts)
+        column_name = f'{column}_{shifts}_p'
         # initialize the column if not
         self.get(column)
         shifts = self.to_ints(shifts)[::-1]
         indices = None
-        count = 0
-        for shift in shifts:
+        for count, shift in enumerate(shifts):
             shifted = self.shift(-shift)
             index = (shifted[column] > 0) * (2 ** count)
             if indices is None:
                 indices = index
             else:
                 indices += index
-            count += 1
         if indices is not None:
             cp = indices.copy()
             self.set_nan(cp, shifts)
@@ -166,12 +164,10 @@ class StockDataFrame(pd.DataFrame):
 
     @staticmethod
     def _process_shifts_segment(shift_segment):
-        if '~' in shift_segment:
-            start, end = shift_segment.split('~')
-            shifts = range(int(start), int(end) + 1)
-        else:
-            shifts = [int(shift_segment)]
-        return shifts
+        if '~' not in shift_segment:
+            return [int(shift_segment)]
+        start, end = shift_segment.split('~')
+        return range(int(start), int(end) + 1)
 
     @staticmethod
     def set_nan(pd_obj, shift):
@@ -201,7 +197,7 @@ class StockDataFrame(pd.DataFrame):
         :return: None
         """
         shift = self.to_int(shifts)
-        rate_key = '{}_{}_r'.format(column, shift)
+        rate_key = f'{column}_{shift}_r'
         self[rate_key] = self._change(self[column], shift)
 
     @staticmethod
@@ -233,7 +229,7 @@ class StockDataFrame(pd.DataFrame):
         :return: None
         """
         shift = self.to_int(shifts)
-        shifted_key = "{}_{}_s".format(column, shift)
+        shifted_key = f"{column}_{shift}_s"
         self[shifted_key] = self._shift(self[column], shift)
 
     def _get_log_ret(self):
@@ -249,7 +245,7 @@ class StockDataFrame(pd.DataFrame):
         :param shifts: range to count, only to previous
         :return: result series
         """
-        column_name = '{}_{}_c'.format(column, shifts)
+        column_name = f'{column}_{shifts}_c'
         shifts = self.get_int_positive(shifts)
         self[column_name] = self[column].rolling(
             center=False,
@@ -266,7 +262,7 @@ class StockDataFrame(pd.DataFrame):
         :param shifts: range to count, only to future
         :return: result series
         """
-        column_name = '{}_{}_fc'.format(column, shifts)
+        column_name = f'{column}_{shifts}_fc'
         shift = self.get_int_positive(shifts)
         reversed_series = self[column][::-1]
         reversed_counts = reversed_series.rolling(
@@ -281,18 +277,17 @@ class StockDataFrame(pd.DataFrame):
         # initialize the column if not
         self.get(column)
         shifts = self.to_ints(shifts)
-        shift_column_names = ['{}_{}_s'.format(column, shift) for shift in
-                              shifts]
+        shift_column_names = [f'{column}_{shift}_s' for shift in shifts]
         [self.get(name) for name in shift_column_names]
         return shift_column_names
 
     def _get_max(self, column, shifts):
-        column_name = '{}_{}_max'.format(column, shifts)
+        column_name = f'{column}_{shifts}_max'
         shift_column_names = self._init_shifted_columns(column, shifts)
         self[column_name] = np.max(self[shift_column_names], axis=1)
 
     def _get_min(self, column, shifts):
-        column_name = '{}_{}_min'.format(column, shifts)
+        column_name = f'{column}_{shifts}_min'
         shift_column_names = self._init_shifted_columns(column, shifts)
         self[column_name] = np.min(self[shift_column_names], axis=1)
 
@@ -306,7 +301,7 @@ class StockDataFrame(pd.DataFrame):
         :return: None
         """
         window = self.get_int_positive(window)
-        column_name = 'rsv_{}'.format(window)
+        column_name = f'rsv_{window}'
         low_min = self._mov_min(self['low'], window)
         high_max = self._mov_max(self['high'], window)
 
@@ -326,7 +321,7 @@ class StockDataFrame(pd.DataFrame):
             window = self.RSI
             column_name = 'rsi'
         else:
-            column_name = 'rsi_{}'.format(window)
+            column_name = f'rsi_{window}'
         window = self.get_int_positive(window)
 
         change = self._delta(self['close'], -1)
@@ -335,7 +330,7 @@ class StockDataFrame(pd.DataFrame):
         p_ema = self._smma(close_pm, window)
         n_ema = self._smma(close_nm, window)
 
-        rs_column_name = 'rs_{}'.format(window)
+        rs_column_name = f'rs_{window}'
         self[rs_column_name] = rs = p_ema / n_ema
         self[column_name] = 100 - 100 / (1.0 + rs)
 
@@ -352,10 +347,10 @@ class StockDataFrame(pd.DataFrame):
             window = self.RSI
             column_name = 'stochrsi'
         else:
-            column_name = 'stochrsi_{}'.format(window)
+            column_name = f'stochrsi_{window}'
         window = self.get_int_positive(window)
 
-        rsi = self['rsi_{}'.format(window)]
+        rsi = self[f'rsi_{window}']
         rsi_min = self._mov_min(rsi, window)
         rsi_max = self._mov_max(rsi, window)
 
@@ -399,7 +394,7 @@ class StockDataFrame(pd.DataFrame):
         :return: result series
         """
         window = self.get_int_positive(windows)
-        column_name = '{}_{}_smma'.format(column, window)
+        column_name = f'{column}_{window}_smma'
         self[column_name] = self._smma(self[column], window)
 
     def _get_trix(self, column=None, windows=None):
@@ -412,14 +407,14 @@ class StockDataFrame(pd.DataFrame):
         :return: result series
         """
         column_name = ""
-        if column is None and windows is None:
-            column_name = 'trix'
         if column is None:
+            if windows is None:
+                column_name = 'trix'
             column = 'close'
         if windows is None:
             windows = self.TRIX_EMA_WINDOW
-        if column_name == "":
-            column_name = '{}_{}_trix'.format(column, windows)
+        if not column_name:
+            column_name = f'{column}_{windows}_trix'
 
         window = self.get_int_positive(windows)
 
@@ -441,14 +436,14 @@ class StockDataFrame(pd.DataFrame):
         :return: result series
         """
         column_name = ""
-        if column is None and windows is None:
-            column_name = 'tema'
         if column is None:
+            if windows is None:
+                column_name = 'tema'
             column = 'close'
         if windows is None:
             windows = self.TEMA_EMA_WINDOW
-        if column_name == "":
-            column_name = '{}_{}_tema'.format(column, windows)
+        if not column_name:
+            column_name = f'{column}_{windows}_tema'
 
         window = self.get_int_positive(windows)
 
@@ -473,7 +468,7 @@ class StockDataFrame(pd.DataFrame):
             window = self.WR
             column_name = 'wr'
         else:
-            column_name = 'wr_{}'.format(window)
+            column_name = f'wr_{window}'
 
         window = self.get_int_positive(window)
         ln = self._mov_min(self['low'], window)
@@ -495,7 +490,7 @@ class StockDataFrame(pd.DataFrame):
             window = self.CCI
             column_name = 'cci'
         else:
-            column_name = 'cci_{}'.format(window)
+            column_name = f'cci_{window}'
         window = self.get_int_positive(window)
 
         tp = self._tp()
@@ -558,10 +553,7 @@ class StockDataFrame(pd.DataFrame):
             if i == 0:
                 ub[i] = b_ub.iloc[i]
                 lb[i] = b_lb.iloc[i]
-                if close.iloc[i] <= ub[i]:
-                    st[i] = ub[i]
-                else:
-                    st[i] = lb[i]
+                st[i] = ub[i] if close.iloc[i] <= ub[i] else lb[i]
                 continue
 
             last_close = close.iloc[i - 1]
@@ -573,29 +565,20 @@ class StockDataFrame(pd.DataFrame):
             curr_b_lb = b_lb.iloc[i]
 
             # calculate current upper band
-            if curr_b_ub < last_ub or last_close > last_ub:
-                ub[i] = curr_b_ub
-            else:
-                ub[i] = last_ub
-
+            ub[i] = curr_b_ub if curr_b_ub < last_ub or last_close > last_ub else last_ub
             # calculate current lower band
-            if curr_b_lb > last_lb or last_close < last_lb:
-                lb[i] = curr_b_lb
-            else:
-                lb[i] = last_lb
-
+            lb[i] = curr_b_lb if curr_b_lb > last_lb or last_close < last_lb else last_lb
             # calculate supertrend
-            if last_st == last_ub:
-                if curr_close <= ub[i]:
-                    st[i] = ub[i]
-                else:
-                    st[i] = lb[i]
-            elif last_st == last_lb:
-                if curr_close > lb[i]:
-                    st[i] = lb[i]
-                else:
-                    st[i] = ub[i]
-
+            if (
+                last_st == last_ub
+                and curr_close <= ub[i]
+                or last_st != last_ub
+                and last_st == last_lb
+                and curr_close <= lb[i]
+            ):
+                st[i] = ub[i]
+            elif last_st in [last_ub, last_lb]:
+                st[i] = lb[i]
         self['supertrend_ub'] = ub
         self['supertrend_lb'] = lb
         self['supertrend'] = st
@@ -618,7 +601,7 @@ class StockDataFrame(pd.DataFrame):
             window = self.ATR_SMMA
             column_name = 'atr'
         else:
-            column_name = 'atr_{}'.format(window)
+            column_name = f'atr_{window}'
         window = self.get_int_positive(window)
         self[column_name] = self._atr(window)
 
@@ -667,13 +650,10 @@ class StockDataFrame(pd.DataFrame):
         :return:
         """
         window = self.get_int_positive(windows)
-        column_name = 'pdm_{}'.format(window)
+        column_name = f'pdm_{window}'
         um, dm = self['um'], self['dm']
         self['pdm'] = np.where(um > dm, um, 0)
-        if window > 1:
-            pdm = self['pdm_{}_ema'.format(window)]
-        else:
-            pdm = self['pdm']
+        pdm = self[f'pdm_{window}_ema'] if window > 1 else self['pdm']
         self[column_name] = pdm
 
     def _get_vr(self, windows=None):
@@ -682,7 +662,7 @@ class StockDataFrame(pd.DataFrame):
             column_name = 'vr'
         else:
             window = self.get_int_positive(windows)
-            column_name = 'vr_{}'.format(window)
+            column_name = f'vr_{window}'
 
         idx = self.index
         gt_zero = np.where(self['change'] > 0, self['volume'], 0)
@@ -708,13 +688,10 @@ class StockDataFrame(pd.DataFrame):
         :return:
         """
         window = self.get_int_positive(windows)
-        column_name = 'mdm_{}'.format(window)
+        column_name = f'mdm_{window}'
         um, dm = self['um'], self['dm']
         self['mdm'] = np.where(dm > um, dm, 0)
-        if window > 1:
-            mdm = self['mdm_{}_ema'.format(window)]
-        else:
-            mdm = self['mdm']
+        mdm = self[f'mdm_{window}_ema'] if window > 1 else self['mdm']
         self[column_name] = mdm
 
     def _get_pdi(self, windows):
@@ -724,25 +701,25 @@ class StockDataFrame(pd.DataFrame):
         :return:
         """
         window = self.get_int_positive(windows)
-        pdm_column = 'pdm_{}'.format(window)
-        tr_column = 'atr_{}'.format(window)
-        pdi_column = 'pdi_{}'.format(window)
+        pdm_column = f'pdm_{window}'
+        tr_column = f'atr_{window}'
+        pdi_column = f'pdi_{window}'
         self[pdi_column] = self[pdm_column] / self[tr_column] * 100
         return self[pdi_column]
 
     def _get_mdi(self, windows):
         window = self.get_int_positive(windows)
-        mdm_column = 'mdm_{}'.format(window)
-        tr_column = 'atr_{}'.format(window)
-        mdi_column = 'mdi_{}'.format(window)
+        mdm_column = f'mdm_{window}'
+        tr_column = f'atr_{window}'
+        mdi_column = f'mdi_{window}'
         self[mdi_column] = self[mdm_column] / self[tr_column] * 100
         return self[mdi_column]
 
     def _get_dx(self, windows):
         window = self.get_int_positive(windows)
-        dx_column = 'dx_{}'.format(window)
-        mdi_column = 'mdi_{}'.format(window)
-        pdi_column = 'pdi_{}'.format(window)
+        dx_column = f'dx_{window}'
+        mdi_column = f'mdi_{window}'
+        pdi_column = f'pdi_{window}'
         mdi, pdi = self[mdi_column], self[pdi_column]
         self[dx_column] = abs(pdi - mdi) / (pdi + mdi) * 100
         return self[dx_column]
@@ -752,9 +729,9 @@ class StockDataFrame(pd.DataFrame):
 
         :return: None
         """
-        self['kdjk'] = self['kdjk_{}'.format(self.KDJ_WINDOW)]
-        self['kdjd'] = self['kdjd_{}'.format(self.KDJ_WINDOW)]
-        self['kdjj'] = self['kdjj_{}'.format(self.KDJ_WINDOW)]
+        self['kdjk'] = self[f'kdjk_{self.KDJ_WINDOW}']
+        self['kdjd'] = self[f'kdjd_{self.KDJ_WINDOW}']
+        self['kdjj'] = self[f'kdjj_{self.KDJ_WINDOW}']
 
     def _get_cr(self, window=26):
         """ Energy Index (Intermediate Willingness Index)
@@ -810,8 +787,8 @@ class StockDataFrame(pd.DataFrame):
         :param window: number of periods
         :return: None
         """
-        rsv_column = 'rsv_{}'.format(window)
-        k_column = 'kdjk_{}'.format(window)
+        rsv_column = f'rsv_{window}'
+        k_column = f'kdjk_{window}'
         self[k_column] = list(self._calc_kd(self.get(rsv_column)))
 
     def _get_kdjd(self, window):
@@ -822,8 +799,8 @@ class StockDataFrame(pd.DataFrame):
         :param window: number of periods
         :return: None
         """
-        k_column = 'kdjk_{}'.format(window)
-        d_column = 'kdjd_{}'.format(window)
+        k_column = f'kdjk_{window}'
+        d_column = f'kdjd_{window}'
         self[d_column] = list(self._calc_kd(self.get(k_column)))
 
     def _get_kdjj(self, window):
@@ -834,9 +811,9 @@ class StockDataFrame(pd.DataFrame):
         :param window: number of periods
         :return: None
         """
-        k_column = 'kdjk_{}'.format(window)
-        d_column = 'kdjd_{}'.format(window)
-        j_column = 'kdjj_{}'.format(window)
+        k_column = f'kdjk_{window}'
+        d_column = f'kdjd_{window}'
+        j_column = f'kdjj_{window}'
         self[j_column] = 3 * self[k_column] - 2 * self[d_column]
 
     @staticmethod
@@ -845,7 +822,7 @@ class StockDataFrame(pd.DataFrame):
 
     def _get_d(self, column, shifts):
         shift = self.to_int(shifts)
-        column_name = '{}_{}_d'.format(column, shift)
+        column_name = f'{column}_{shift}_d'
         self[column_name] = self._delta(self[column], shift)
 
     @staticmethod
@@ -872,7 +849,7 @@ class StockDataFrame(pd.DataFrame):
         :return: None
         """
         window = self.get_int_positive(windows)
-        column_name = '{}_{}_sma'.format(column, window)
+        column_name = f'{column}_{window}_sma'
         self[column_name] = self._sma(self[column], window)
 
     @staticmethod
@@ -891,7 +868,7 @@ class StockDataFrame(pd.DataFrame):
         :return: None
         """
         window = self.get_int_positive(windows)
-        column_name = '{}_{}_ema'.format(column, window)
+        column_name = f'{column}_{window}_ema'
         self[column_name] = self._ema(self[column], window)
 
     def _get_boll(self):
@@ -972,7 +949,7 @@ class StockDataFrame(pd.DataFrame):
         :return: None
         """
         window = self.get_int_positive(windows)
-        column_name = '{}_{}_mstd'.format(column, window)
+        column_name = f'{column}_{window}_mstd'
         self[column_name] = self._mstd(self[column], window)
 
     def _get_mvar(self, column, windows):
@@ -983,7 +960,7 @@ class StockDataFrame(pd.DataFrame):
         :return: None
         """
         window = self.get_int_positive(windows)
-        column_name = '{}_{}_mvar'.format(column, window)
+        column_name = f'{column}_{window}_mvar'
         self[column_name] = self[column].rolling(
             min_periods=1, window=window, center=False).var()
 
@@ -1000,7 +977,7 @@ class StockDataFrame(pd.DataFrame):
             window = self.VWMA
             column_name = 'vwma'
         else:
-            column_name = 'vwma_{}'.format(window)
+            column_name = f'vwma_{window}'
         window = self.get_int_positive(window)
 
         tpv = self['volume'] * self._tp()
@@ -1030,7 +1007,7 @@ class StockDataFrame(pd.DataFrame):
             window = self.CHOP
             column_name = 'chop'
         else:
-            column_name = 'chop_{}'.format(window)
+            column_name = f'chop_{window}'
         window = self.get_int_positive(window)
         atr = self._atr(1)
         atr_sum = self._mov_sum(atr, window)
@@ -1054,7 +1031,7 @@ class StockDataFrame(pd.DataFrame):
             window = self.MFI
             column_name = 'mfi'
         else:
-            column_name = 'mfi_{}'.format(window)
+            column_name = f'mfi_{window}'
         window = self.get_int_positive(window)
         middle = self._tp()
         money_flow = (middle * self["volume"]).fillna(0.0)
@@ -1083,11 +1060,11 @@ class StockDataFrame(pd.DataFrame):
         window = self.get_int_positive(windows)
         if slows is None or fasts is None:
             slow, fast = self.KAMA_SLOW, self.KAMA_FAST
-            column_name = "{}_{}_kama".format(column, window)
+            column_name = f"{column}_{window}_kama"
         else:
             slow = self.get_int_positive(slows)
             fast = self.get_int_positive(fasts)
-            column_name = '{}_{}_kama_{}_{}'.format(column, window, fast, slow)
+            column_name = f'{column}_{window}_kama_{fast}_{slow}'
 
         col = self[column]
         col_window_s = self._shift(col, -window)
@@ -1136,10 +1113,7 @@ class StockDataFrame(pd.DataFrame):
     @classmethod
     def parse_cross_column(cls, name):
         m = re.match(cls.CROSS_COLUMN_MATCH_STR, name)
-        ret = [None, None, None]
-        if m is not None:
-            ret = m.group(1, 2, 3)
-        return ret
+        return m.group(1, 2, 3) if m is not None else [None, None, None]
 
     def _get_rate(self):
         """ same as percent
@@ -1223,20 +1197,20 @@ class StockDataFrame(pd.DataFrame):
             ret = self.parse_column_name(key)
             if len(ret) == 5:
                 c, r, t, s, f = ret
-                func_name = '_get_{}'.format(t)
+                func_name = f'_get_{t}'
                 getattr(self, func_name)(c, r, s, f)
             elif len(ret) == 3:
                 c, r, t = ret
-                func_name = '_get_{}'.format(t)
+                func_name = f'_get_{t}'
                 getattr(self, func_name)(c, r)
             elif len(ret) == 2:
                 c, r = ret
-                func_name = '_get_{}'.format(c)
+                func_name = f'_get_{c}'
                 getattr(self, func_name)(r)
             else:
-                raise UserWarning("Invalid number of return arguments "
-                                  "after parsing column name: '{}'"
-                                  .format(key))
+                raise UserWarning(
+                    f"Invalid number of return arguments after parsing column name: '{key}'"
+                )
 
     def __init_column(self, key):
         if key not in self:
